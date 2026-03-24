@@ -53,4 +53,5 @@ namespace COILMilestone1Tests
             Assert::AreEqual(8, pkt.GetLength()); // 4 header + 3 body + 1 crc
         }
     };
+
 }
