@@ -1,120 +1,135 @@
 #include "PktDef.h"
 #include <cstring>
 
-// Default constructor
 PktDef::PktDef()
 {
-    std::memset(&header, 0, sizeof(header));
-    Data = nullptr;
-    CRC = 0;
+    std::memset(&Packet.header, 0, sizeof(Header));
+    Packet.Data = nullptr;
+    Packet.CRC = 0;
     RawBuffer = nullptr;
 }
 
-// Raw packet constructor
-PktDef::PktDef(char* rawData)
+PktDef::PktDef(char* input)
 {
-    std::memset(&header, 0, sizeof(header));
-    Data = nullptr;
-    CRC = 0;
+    std::memset(&Packet.header, 0, sizeof(Header));
+    Packet.Data = nullptr;
+    Packet.CRC = 0;
     RawBuffer = nullptr;
 
-    // We will implement this properly later
+    if (input == nullptr)
+        return;
+
+    std::memcpy(&Packet.header, input, HEADERSIZE);
+
+    int bodySize = Packet.header.Length - HEADERSIZE - 1;
+
+    if (bodySize > 0)
+    {
+        Packet.Data = new char[bodySize];
+        std::memcpy(Packet.Data, input + HEADERSIZE, bodySize);
+    }
+
+    Packet.CRC = input[Packet.header.Length - 1];
+
+    RawBuffer = new char[Packet.header.Length];
+    std::memcpy(RawBuffer, input, Packet.header.Length);
 }
 
-// Destructor
 PktDef::~PktDef()
 {
-    delete[] Data;
+    delete[] Packet.Data;
     delete[] RawBuffer;
 }
 
 void PktDef::SetCmd(CmdType cmd)
 {
-    header.Drive = 0;
-    header.Status = 0;
-    header.Sleep = 0;
+    Packet.header.Drive = 0;
+    Packet.header.Status = 0;
+    Packet.header.Sleep = 0;
 
-    switch (cmd)
-    {
-    case DRIVE:
-        header.Drive = 1;
-        break;
-    case SLEEP:
-        header.Sleep = 1;
-        break;
-    case RESPONSE:
-        header.Status = 1;
-        break;
-    }
+    if (cmd == DRIVE)
+        Packet.header.Drive = 1;
+    else if (cmd == SLEEP)
+        Packet.header.Sleep = 1;
+    else if (cmd == RESPONSE)
+        Packet.header.Status = 1;
 }
 
-void PktDef::SetBodyData(char* data, int size)
+void PktDef::SetBodyData(char* input, int size)
 {
-    delete[] Data;
-    Data = new char[size];
-    std::memcpy(Data, data, size);
+    delete[] Packet.Data;
+    Packet.Data = nullptr;
 
-    header.Length = HEADERSIZE + size + 1; // +1 for CRC
+    if (input != nullptr && size > 0)
+    {
+        Packet.Data = new char[size];
+        std::memcpy(Packet.Data, input, size);
+        Packet.header.Length = HEADERSIZE + size + 1;
+    }
+    else
+    {
+        Packet.header.Length = HEADERSIZE + 1;
+    }
 }
 
 void PktDef::SetPktCount(int count)
 {
-    header.pktCount = static_cast<unsigned short>(count);
+    Packet.header.PktCount = static_cast<unsigned short>(count);
 }
 
-CmdType PktDef::GetCmd() const
+CmdType PktDef::GetCmd()
 {
-    if (header.Drive) return DRIVE;
-    if (header.Sleep) return SLEEP;
+    if (Packet.header.Drive) return DRIVE;
+    if (Packet.header.Sleep) return SLEEP;
     return RESPONSE;
 }
 
-bool PktDef::GetAck() const
+bool PktDef::GetAck()
 {
-    return header.Ack == 1;
+    return Packet.header.Ack == 1;
 }
 
-int PktDef::GetLength() const
+int PktDef::GetLength()
 {
-    return header.Length;
+    return Packet.header.Length;
 }
 
-char* PktDef::GetBodyData() const
+char* PktDef::GetBodyData()
 {
-    return Data;
+    return Packet.Data;
 }
 
-int PktDef::GetPktCount() const
+int PktDef::GetPktCount()
 {
-    return header.pktCount;
+    return Packet.header.PktCount;
 }
 
-bool PktDef::CheckCRC(char* buffer, int size)
+bool PktDef::CheckCRC(char* input, int size)
 {
-    if (size <= 0) return false;
+    if (input == nullptr || size <= 0)
+        return false;
 
     unsigned char count = 0;
 
     for (int i = 0; i < size - 1; i++)
     {
-        unsigned char byte = static_cast<unsigned char>(buffer[i]);
+        unsigned char value = static_cast<unsigned char>(input[i]);
         for (int b = 0; b < 8; b++)
         {
-            if (byte & (1 << b))
+            if (value & (1 << b))
                 count++;
         }
     }
 
-    return count == static_cast<unsigned char>(buffer[size - 1]);
+    return count == static_cast<unsigned char>(input[size - 1]);
 }
 
-unsigned char PktDef::CalcCRC()
+void PktDef::CalcCRC()
 {
     unsigned char count = 0;
+    unsigned char* hdr = reinterpret_cast<unsigned char*>(&Packet.header);
 
-    // count bits in header bytes
-    unsigned char* hdr = reinterpret_cast<unsigned char*>(&header);
-    for (int i = 0; i < sizeof(Header); i++)
+    for (int i = 0; i < HEADERSIZE; i++)
     {
         for (int b = 0; b < 8; b++)
         {
@@ -123,41 +138,44 @@ unsigned char PktDef::CalcCRC()
         }
     }
 
-    // count bits in data bytes
-    int bodySize = header.Length - HEADERSIZE - 1;
-    if (Data != nullptr && bodySize > 0)
+    int bodySize = Packet.header.Length - HEADERSIZE - 1;
+
+    if (Packet.Data != nullptr && bodySize > 0)
     {
         for (int i = 0; i < bodySize; i++)
         {
-            unsigned char byte = static_cast<unsigned char>(Data[i]);
+            unsigned char value = static_cast<unsigned char>(Packet.Data[i]);
             for (int b = 0; b < 8; b++)
             {
-                if (byte & (1 << b))
+                if (value & (1 << b))
                     count++;
             }
         }
     }
 
-    CRC = count;
-    return CRC;
+    Packet.CRC = static_cast<char>(count);
 }
 
 char* PktDef::GenPacket()
 {
     delete[] RawBuffer;
+    RawBuffer = nullptr;
 
-    int totalLength = header.Length;
-    RawBuffer = new char[totalLength];
+    if (Packet.header.Length <= 0)
+        return nullptr;
 
-    std::memcpy(RawBuffer, &header, HEADERSIZE);
+    RawBuffer = new char[Packet.header.Length];
+    std::memcpy(RawBuffer, &Packet.header, HEADERSIZE);
 
-    int bodySize = totalLength - HEADERSIZE - 1;
-    if (Data != nullptr && bodySize > 0)
+    int bodySize = Packet.header.Length - HEADERSIZE - 1;
+
+    if (Packet.Data != nullptr && bodySize > 0)
     {
-        std::memcpy(RawBuffer + HEADERSIZE, Data, bodySize);
+        std::memcpy(RawBuffer + HEADERSIZE, Packet.Data, bodySize);
     }
 
-    RawBuffer[totalLength - 1] = static_cast<char>(CalcCRC());
+    CalcCRC();
+    RawBuffer[Packet.header.Length - 1] = Packet.CRC;
 
     return RawBuffer;
 }
