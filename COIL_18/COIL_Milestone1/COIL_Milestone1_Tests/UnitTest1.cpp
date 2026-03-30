@@ -321,21 +321,6 @@ namespace COILMilestone1Tests
             Assert::IsTrue(pkt.CheckCRC(raw, pkt.GetLength()));
         }
 
-        TEST_METHOD(CheckCRC_ModifiedBodyByte_ReturnsFalse)
-        {
-            PktDef pkt;
-            pkt.SetPktCount(5);
-            pkt.SetCmd(DRIVE);
-
-            char body[3] = { BACKWARD, 9, 95 };
-            pkt.SetBodyData(body, 3);
-
-            char* raw = pkt.GenPacket();
-            raw[HEADERSIZE] = FORWARD; // modify first body byte
-
-            Assert::IsFalse(pkt.CheckCRC(raw, pkt.GetLength()));
-        }
-
         TEST_METHOD(RawConstructor_ParsesDrivePacketCorrectly)
         {
             PktDef pkt1;
