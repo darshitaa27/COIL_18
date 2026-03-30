@@ -226,5 +226,176 @@ namespace COILMilestone1Tests
             Assert::AreEqual((char)5, out[1]);
             Assert::AreEqual((char)80, out[2]);
         }
+
+        TEST_METHOD(GenPacket_ReturnsNonNullBuffer)
+        {
+            PktDef pkt;
+            pkt.SetPktCount(1);
+            pkt.SetCmd(DRIVE);
+
+            char body[3] = { FORWARD, 10, 80 };
+            pkt.SetBodyData(body, 3);
+
+            char* raw = pkt.GenPacket();
+
+            Assert::IsNotNull(raw);
+        }
+
+        TEST_METHOD(GenPacket_DrivePacket_LengthIs8)
+        {
+            PktDef pkt;
+            pkt.SetPktCount(1);
+            pkt.SetCmd(DRIVE);
+
+            char body[3] = { FORWARD, 10, 80 };
+            pkt.SetBodyData(body, 3);
+
+            pkt.GenPacket();
+            Assert::AreEqual(8, pkt.GetLength());
+        }
+
+        TEST_METHOD(GenPacket_SleepPacket_LengthIs5)
+        {
+            PktDef pkt;
+            pkt.SetPktCount(3);
+            pkt.SetCmd(SLEEP);
+            pkt.SetBodyData(nullptr, 0);
+
+            char* raw = pkt.GenPacket();
+
+            Assert::IsNotNull(raw);
+            Assert::AreEqual(5, pkt.GetLength());
+        }
+
+        TEST_METHOD(GenPacket_ResponsePacket_LengthIs5)
+        {
+            PktDef pkt;
+            pkt.SetPktCount(4);
+            pkt.SetCmd(RESPONSE);
+            pkt.SetBodyData(nullptr, 0);
+
+            char* raw = pkt.GenPacket();
+
+            Assert::IsNotNull(raw);
+            Assert::AreEqual(5, pkt.GetLength());
+        }
+
+        TEST_METHOD(CheckCRC_ValidDrivePacket_ReturnsTrue)
+        {
+            PktDef pkt;
+            pkt.SetPktCount(1);
+            pkt.SetCmd(DRIVE);
+
+            char body[3] = { FORWARD, 10, 80 };
+            pkt.SetBodyData(body, 3);
+
+            char* raw = pkt.GenPacket();
+
+            Assert::IsTrue(pkt.CheckCRC(raw, pkt.GetLength()));
+        }
+
+        TEST_METHOD(CheckCRC_InvalidCRCByte_ReturnsFalse)
+        {
+            PktDef pkt;
+            pkt.SetPktCount(1);
+            pkt.SetCmd(DRIVE);
+
+            char body[3] = { FORWARD, 10, 80 };
+            pkt.SetBodyData(body, 3);
+
+            char* raw = pkt.GenPacket();
+            raw[pkt.GetLength() - 1] = 0;
+
+            Assert::IsFalse(pkt.CheckCRC(raw, pkt.GetLength()));
+        }
+
+        TEST_METHOD(CheckCRC_NoBodyPacket_ReturnsTrue)
+        {
+            PktDef pkt;
+            pkt.SetPktCount(3);
+            pkt.SetCmd(SLEEP);
+            pkt.SetBodyData(nullptr, 0);
+
+            char* raw = pkt.GenPacket();
+
+            Assert::IsTrue(pkt.CheckCRC(raw, pkt.GetLength()));
+        }
+
+        TEST_METHOD(CheckCRC_ModifiedBodyByte_ReturnsFalse)
+        {
+            PktDef pkt;
+            pkt.SetPktCount(5);
+            pkt.SetCmd(DRIVE);
+
+            char body[3] = { BACKWARD, 9, 95 };
+            pkt.SetBodyData(body, 3);
+
+            char* raw = pkt.GenPacket();
+            raw[HEADERSIZE] = FORWARD; // modify first body byte
+
+            Assert::IsFalse(pkt.CheckCRC(raw, pkt.GetLength()));
+        }
+
+        TEST_METHOD(RawConstructor_ParsesDrivePacketCorrectly)
+        {
+            PktDef pkt1;
+            pkt1.SetPktCount(21);
+            pkt1.SetCmd(DRIVE);
+
+            char body[3] = { BACKWARD, 7, 90 };
+            pkt1.SetBodyData(body, 3);
+
+            char* raw = pkt1.GenPacket();
+
+            PktDef pkt2(raw);
+
+            Assert::AreEqual(21, pkt2.GetPktCount());
+            Assert::AreEqual((int)DRIVE, (int)pkt2.GetCmd());
+            Assert::AreEqual(8, pkt2.GetLength());
+
+            char* parsed = pkt2.GetBodyData();
+            Assert::IsNotNull(parsed);
+            Assert::AreEqual((char)BACKWARD, parsed[0]);
+            Assert::AreEqual((char)7, parsed[1]);
+            Assert::AreEqual((char)90, parsed[2]);
+
+            Assert::IsTrue(pkt2.CheckCRC(raw, pkt2.GetLength()));
+        }
+
+        TEST_METHOD(RawConstructor_ParsesSleepPacketCorrectly)
+        {
+            PktDef pkt1;
+            pkt1.SetPktCount(30);
+            pkt1.SetCmd(SLEEP);
+            pkt1.SetBodyData(nullptr, 0);
+
+            char* raw = pkt1.GenPacket();
+
+            PktDef pkt2(raw);
+
+            Assert::AreEqual(30, pkt2.GetPktCount());
+            Assert::AreEqual((int)SLEEP, (int)pkt2.GetCmd());
+            Assert::AreEqual(5, pkt2.GetLength());
+            Assert::IsTrue(pkt2.GetBodyData() == nullptr);
+            Assert::IsTrue(pkt2.CheckCRC(raw, pkt2.GetLength()));
+        }
+
+        TEST_METHOD(RawConstructor_ParsesResponsePacketCorrectly)
+        {
+            PktDef pkt1;
+            pkt1.SetPktCount(40);
+            pkt1.SetCmd(RESPONSE);
+            pkt1.SetBodyData(nullptr, 0);
+
+            char* raw = pkt1.GenPacket();
+
+            PktDef pkt2(raw);
+
+            Assert::AreEqual(40, pkt2.GetPktCount());
+            Assert::AreEqual((int)RESPONSE, (int)pkt2.GetCmd());
+            Assert::AreEqual(5, pkt2.GetLength());
+            Assert::IsTrue(pkt2.GetBodyData() == nullptr);
+            Assert::IsTrue(pkt2.CheckCRC(raw, pkt2.GetLength()));
+        }
     };
 }
