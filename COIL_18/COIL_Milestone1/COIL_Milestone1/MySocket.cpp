@@ -5,13 +5,16 @@
 MySocket::MySocket(SocketType type, std::string ip, unsigned int port, ConnectionType connType, unsigned int size)
 {
     WSADATA wsaData;
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    {
+        std::cout << "ERROR: WSAStartup failed.\n";
+    }
 
     mySocket = type;
     IPAddr = ip;
 
     if (port == 0 || port > 65535)
-        Port = 54000;
+        Port = DEFAULT_PORT;
     else
         Port = static_cast<int>(port);
 
@@ -49,8 +52,14 @@ MySocket::MySocket(SocketType type, std::string ip, unsigned int port, Connectio
 
             if (WelcomeSocket != INVALID_SOCKET)
             {
-                bind(WelcomeSocket, (sockaddr*)&SvrAddr, sizeof(SvrAddr));
-                listen(WelcomeSocket, 1);
+                if (bind(WelcomeSocket, (sockaddr*)&SvrAddr, sizeof(SvrAddr)) == SOCKET_ERROR)
+                {
+                    std::cout << "ERROR: TCP server bind failed.\n";
+                }
+                else if (listen(WelcomeSocket, 1) == SOCKET_ERROR)
+                {
+                    std::cout << "ERROR: TCP server listen failed.\n";
+                }
             }
         }
         else
@@ -64,7 +73,10 @@ MySocket::MySocket(SocketType type, std::string ip, unsigned int port, Connectio
 
         if (mySocket == SERVER && ConnectionSocket != INVALID_SOCKET)
         {
-            bind(ConnectionSocket, (sockaddr*)&SvrAddr, sizeof(SvrAddr));
+            if (bind(ConnectionSocket, (sockaddr*)&SvrAddr, sizeof(SvrAddr)) == SOCKET_ERROR)
+            {
+                std::cout << "ERROR: UDP server bind failed.\n";
+            }
         }
     }
 }
@@ -149,14 +161,20 @@ void MySocket::SendData(const char* data, int size)
         if (!bTCPConnect || ConnectionSocket == INVALID_SOCKET)
             return;
 
-        send(ConnectionSocket, data, sendSize, 0);
+        if (send(ConnectionSocket, data, sendSize, 0) == SOCKET_ERROR)
+        {
+            std::cout << "ERROR: TCP send failed.\n";
+        }
     }
     else
     {
         if (ConnectionSocket == INVALID_SOCKET)
             return;
 
-        sendto(ConnectionSocket, data, sendSize, 0, (sockaddr*)&SvrAddr, sizeof(SvrAddr));
+        if (sendto(ConnectionSocket, data, sendSize, 0, (sockaddr*)&SvrAddr, sizeof(SvrAddr)) == SOCKET_ERROR)
+        {
+            std::cout << "ERROR: UDP send failed.\n";
+        }
     }
 }
 

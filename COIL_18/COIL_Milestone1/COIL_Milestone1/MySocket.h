@@ -19,6 +19,7 @@ enum ConnectionType
 };
 
 const int DEFAULT_SIZE = 256;
+const int DEFAULT_PORT = 54000;
 
 class MySocket
 {
